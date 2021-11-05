@@ -1,4 +1,3 @@
-glob
 Flask
 gunicorn
 joblib
