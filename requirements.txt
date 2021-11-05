@@ -5,5 +5,4 @@ scikit-learn
 python_speech_features
 pydub
 scipy
-werkzeug.utils
-ffmpeg
+werkzeug
