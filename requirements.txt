@@ -4,6 +4,6 @@ joblib
 scikit-learn
 python_speech_features
 pydub
-scipy.io.wavfile
+scipy
 werkzeug.utils
 ffmpeg
