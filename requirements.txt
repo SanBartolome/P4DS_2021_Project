@@ -1,5 +1,11 @@
+os
+glob
 Flask
 gunicorn
 joblib
 scikit-learn
-numpy
+python_speech_features
+pydub
+scipy.io.wavfile
+werkzeug.utils
+ffmpeg

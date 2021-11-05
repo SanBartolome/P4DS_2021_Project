@@ -1,91 +1,86 @@
-from flask import Flask
-from flask import request
+import os
+import glob
+from flask import Flask, flash, request, redirect, url_for, render_template
 from joblib import load
-import numpy as np
+from pydub import AudioSegment
+import scipy.io.wavfile as wav
+from python_speech_features import mfcc
+from werkzeug.utils import secure_filename
+
+ALLOWED_EXTENSIONS = {'mp3', 'wav'}
 
 app = Flask(__name__)
-model = load('model.joblib')
-labels = ['setosa', 'versicolor', 'virginica']
+app.secret_key = b'_5#y2L"F4Q8z\n\xec]/'
 
-@app.route("/")
+music_model = load('music_model.joblib')
+genres = {1: 'blues',
+             2: 'hiphop',
+             3: 'metal',
+             4: 'reggae',
+             5: 'classical',
+             6: 'country',
+             7: 'disco',
+             8: 'rock',
+             9: 'pop'}
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def feature_extraction(file):
+	print('file to extract the features:')
+	print(file)
+	features=[]
+	(sampleRate,data) = wav.read(file)
+	mfcc_feature = mfcc(data,sampleRate,
+							winlen=0.020,
+							appendEnergy = False)
+	meanMatrix = mfcc_feature.mean(0)
+	for x in meanMatrix:
+		features.append(x)
+	return features
+
+@app.route("/", methods=["GET","POST"])
 def home():
-	return """
-	<html>
-		<head>
-			<meta charset="UTF-8" />
-			<meta name="viewport" content="width=device-width, initial-scale=1" />
-			<meta http-equiv="X-UA-Compatible" content="ie-edge" />
-			<title>Web Grupo 4 - Formulario</title>
-			<link
-			href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css"
-			rel="stylesheet"
-			/>
-		</head>
-		<body class="h-100 bg-dark">
-			<div class="h-100 w-100 d-flex justify-content-center align-items-center">
-				<div class="card w-50">
-					<div class="card-body py-4">
-						<h2 class="card-title text-center">IRIS predicción</h2>
-						<h4 class="card-title text-center">Ingrese los siguientes valores:</h4>
-						<form class="d-flex flex-column" action='predict' method='GET'>
-							<div class="mb-3">
-								<label for="v1" class="form-label">Longitud del cáliz</label>
-								<input type="text" id="v1" name="v1" class="form-control w-50" required>
-							</div>
-							<div class="mb-3">
-								<label for="v2" class="form-label">Ancho del cáliz</label>
-								<input type="text" id="v2" name="v2" class="form-control w-50" required>
-							</div>
-							<div class="mb-3">
-								<label for="v3" class="form-label">Largo del pétalo</label>
-								<input type="text" id="v3" name="v3" class="form-control w-50" required>
-							</div>
-							<div class="mb-3">
-								<label for="v4" class="form-label">Ancho del pétalo</label>
-								<input type="text" id="v4" name="v4" class="form-control w-50" required>
-							</div>
-							<button type="submit" class="btn btn-primary mt-4 w-50 align-self-center">Predecir</button>
-						</form>
-					</div>
-				</div>
-			</div>
-		</body>
-	</html>
-	"""
+	if request.method == 'POST':
+			if 'file' not in request.files:
+				flash('No file part')
+				return redirect(request.url)
+			file = request.files['file']
+			if file.filename == '':
+				flash('No selected file')
+				return redirect(request.url)
+			if file:
+				if allowed_file(file.filename):
+					filename = secure_filename(file.filename)
+					folder = os.path.join(app.instance_path, 'uploads')
+					os.makedirs(folder, exist_ok=True)
+					files = glob.glob(os.path.join(folder,'*'))
+					for f in files:
+						os.remove(f)
+					file.save(os.path.join(folder, secure_filename(filename)))
+					return redirect(url_for('predict', name=filename))
+				else:
+					flash('Incorrect format')
+					return redirect(request.url)
+	return render_template('home.html')
 
 @app.route("/predict")
 def predict():
-	v1 = float(request.args.get('v1'))
-	v2 = float(request.args.get('v2'))
-	v3 = float(request.args.get('v3'))
-	v4 = float(request.args.get('v4'))
-
-	result = model.predict(np.array([[v1,v2,v3,v4]]))
-
-	return """
-	<html>
-		<head>
-			<meta charset="UTF-8" />
-			<meta name="viewport" content="width=device-width, initial-scale=1" />
-			<meta http-equiv="X-UA-Compatible" content="ie-edge" />
-			<title>Web Grupo 4 - Resultado</title>
-			<link
-			href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css"
-			rel="stylesheet"
-			/>
-		</head>
-		<body class="h-100 bg-dark">
-			<div class="h-100 w-100 d-flex justify-content-center align-items-center">
-				<div class="card w-50">
-					<div class="card-body py-4">
-						<h2 class="card-title text-center">Resultado</h2>
-						"""+"<h1 class='card-title text-center'>{}</h1>".format(labels[result[0]])+"""
-					</div>
-				</div>
-			</div>
-		</body>
-	</html>
-	"""
+	filename = request.args['name']
+	extension = filename.rsplit('.', 1)[1].lower()
+	filepath = os.path.join(os.path.join(app.instance_path, 'uploads'), filename)
+	dst = "test.wav"
+	if(extension == 'mp3'):
+		sound = AudioSegment.from_mp3(filepath)
+		sound.export(dst, format="wav")
+		audio_file="test.wav"
+		audio_feature=feature_extraction(audio_file)
+	elif(extension == 'wav'):
+		audio_feature=feature_extraction(filepath)
+	pred_audio=music_model.predict([audio_feature])
+	result = genres[int(pred_audio)-2]
+	return render_template('result.html', value=result)
 
 if __name__ == '__main__':
 	app.run(debug=False, use_reloader=True)
