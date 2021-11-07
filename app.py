@@ -1,6 +1,7 @@
 import os
 import glob
 from flask import Flask, flash, request, redirect, url_for, render_template
+from flask.helpers import send_file
 from joblib import load
 from pydub import AudioSegment
 import scipy.io.wavfile as wav
@@ -80,7 +81,16 @@ def predict():
 		audio_feature=feature_extraction(filepath)
 	pred_audio=music_model.predict([audio_feature])
 	result = genres[int(pred_audio)-2]
-	return render_template('result.html', value=result)
+	return render_template('result.html', value=result, file=filename)
+
+@app.route('/<audio_file_name>')
+def returnAudioFile(audio_file_name):
+    path_to_audio_file = os.path.join(os.path.join(app.instance_path, 'uploads'), audio_file_name)
+    return send_file(
+         path_to_audio_file, 
+         mimetype="audio/" + audio_file_name.rsplit('.', 1)[1].lower(), 
+         as_attachment=True, 
+         attachment_filename=audio_file_name)
 
 if __name__ == '__main__':
 	app.run(debug=False, use_reloader=True)
